@@ -170,7 +170,9 @@ export const getAll = protectedProcedure
             const data =
                input?.all === true
                   ? await dataQuery
-                  : await dataQuery.limit(pageSize).offset((page - 1) * pageSize);
+                  : await dataQuery
+                       .limit(pageSize)
+                       .offset((page - 1) * pageSize);
 
             return { data, total: countRow?.total ?? 0 };
          },

@@ -313,61 +313,66 @@ const withOrganization = withAuth.use(({ context, next, errors }) => {
    });
 });
 
-const withORPCErrors = withOrganization.use(async ({ context, next, errors }) => {
-   const result = await Result.tryPromise({
-      try: async () => next(),
-      catch: (error) => error,
-   });
+const withORPCErrors = withOrganization.use(
+   async ({ context, next, errors }) => {
+      const result = await Result.tryPromise({
+         try: async () => next(),
+         catch: (error) => error,
+      });
 
-   if (Result.isOk(result)) return result.value;
+      if (Result.isOk(result)) return result.value;
 
-   const zodError = getZodError(result.error);
-   if (zodError) {
-      const issues = zodError.issues.map(formatZodIssue);
-      throw errors.BAD_REQUEST({
-         message: zodError.issues[0]?.message ?? "Dados inválidos.",
+      const zodError = getZodError(result.error);
+      if (zodError) {
+         const issues = zodError.issues.map(formatZodIssue);
+         throw errors.BAD_REQUEST({
+            message: zodError.issues[0]?.message ?? "Dados inválidos.",
+            cause: result.error,
+            data: { tag: "ValidationError", issues },
+         });
+      }
+
+      if (!isTaggedError(result.error)) {
+         const error = result.error;
+         getLogger(context).error(
+            error instanceof Error ? error : String(error),
+            {
+               module: "orpc",
+               message: "Erro não mapeado em procedure oRPC.",
+               tags: ["orpc", "unmapped-error"],
+            },
+         );
+         throw errors.INTERNAL_SERVER_ERROR({
+            message: "Ocorreu um erro inesperado. Tente novamente.",
+            cause: result.error,
+            data: { tag: "UnmappedError" },
+         });
+      }
+      const status = Reflect.get(result.error, "error").status;
+
+      const options = {
+         message: result.error.message,
          cause: result.error,
-         data: { tag: "ValidationError", issues },
-      });
-   }
-
-   if (!isTaggedError(result.error)) {
-      getLogger(context).error({
-         module: "orpc",
-         message: "Erro não mapeado em procedure oRPC.",
-         err: result.error,
-         tags: ["orpc", "unmapped-error"],
-      });
-      throw errors.INTERNAL_SERVER_ERROR({
-         message: "Ocorreu um erro inesperado. Tente novamente.",
-         cause: result.error,
-         data: { tag: "UnmappedError" },
-      });
-   }
-   const status = Reflect.get(result.error, "error").status;
-
-   const options = {
-      message: result.error.message,
-      cause: result.error,
-      data: { tag: result.error._tag },
-   };
-   switch (status) {
-      case 400:
-         throw errors.BAD_REQUEST(options);
-      case 401:
-         throw errors.UNAUTHORIZED(options);
-      case 403:
-         throw errors.FORBIDDEN(options);
-      case 404:
-         throw errors.NOT_FOUND(options);
-      case 409:
-         throw errors.CONFLICT(options);
-      case 429:
-         throw errors.TOO_MANY_REQUESTS(options);
-      default:
-         throw errors.INTERNAL_SERVER_ERROR(options);
-   }
-});
+         data: { tag: result.error._tag },
+      };
+      switch (status) {
+         case 400:
+            throw errors.BAD_REQUEST(options);
+         case 401:
+            throw errors.UNAUTHORIZED(options);
+         case 403:
+            throw errors.FORBIDDEN(options);
+         case 404:
+            throw errors.NOT_FOUND(options);
+         case 409:
+            throw errors.CONFLICT(options);
+         case 429:
+            throw errors.TOO_MANY_REQUESTS(options);
+         default:
+            throw errors.INTERNAL_SERVER_ERROR(options);
+      }
+   },
+);
 
 const withLogger = withORPCErrors.use(
    async ({ context, path, next }, input) => {
