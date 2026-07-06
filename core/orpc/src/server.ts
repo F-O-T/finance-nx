@@ -313,7 +313,7 @@ const withOrganization = withAuth.use(({ context, next, errors }) => {
    });
 });
 
-const withORPCErrors = withOrganization.use(async ({ next, errors }) => {
+const withORPCErrors = withOrganization.use(async ({ context, next, errors }) => {
    const result = await Result.tryPromise({
       try: async () => next(),
       catch: (error) => error,
@@ -332,7 +332,17 @@ const withORPCErrors = withOrganization.use(async ({ next, errors }) => {
    }
 
    if (!isTaggedError(result.error)) {
-      throw new Error(String(result.error), { cause: result.error });
+      getLogger(context).error({
+         module: "orpc",
+         message: "Erro não mapeado em procedure oRPC.",
+         err: result.error,
+         tags: ["orpc", "unmapped-error"],
+      });
+      throw errors.INTERNAL_SERVER_ERROR({
+         message: "Ocorreu um erro inesperado. Tente novamente.",
+         cause: result.error,
+         data: { tag: "UnmappedError" },
+      });
    }
    const status = Reflect.get(result.error, "error").status;
 
@@ -394,10 +404,13 @@ const withLogger = withORPCErrors.use(
          success: Result.isOk(result),
          input,
       };
-      if (Result.isError(result) && isTaggedError(result.error)) {
+      if (Result.isError(result)) {
+         const error = result.error;
          Object.assign(orpcLog, {
-            errorName: result.error.name,
-            errorMessage: result.error.message,
+            errorName: error instanceof Error ? error.name : "UnknownError",
+            errorMessage:
+               error instanceof Error ? error.message : String(error),
+            errorTagged: isTaggedError(error),
          });
       }
 
