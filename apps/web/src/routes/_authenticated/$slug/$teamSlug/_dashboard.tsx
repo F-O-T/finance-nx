@@ -16,7 +16,7 @@ import { DashboardLayout } from "./-layout/dashboard-layout";
 interface OnEnterContext {
    queryClient: QueryClient;
    orpc: typeof orpcClient;
-   session: {
+   session?: {
       user: { id: string; email?: string | null; name?: string | null };
       session?: { activeOrganizationId?: string | null } | null;
    };
@@ -25,6 +25,7 @@ interface OnEnterContext {
 const onDashboardEnter = createIsomorphicFn()
    .server((_context: OnEnterContext) => {})
    .client(async (context: OnEnterContext) => {
+      if (!context.session?.user) return;
       const { user, session } = context.session;
       posthog.identify(user.id, {
          email: user.email ?? undefined,
