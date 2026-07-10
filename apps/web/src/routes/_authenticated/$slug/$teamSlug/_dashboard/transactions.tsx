@@ -24,7 +24,7 @@ const transactionsSearchSchema = z.object({
       .catch([])
       .default([]),
    page: z.number().int().min(1).catch(1).default(1),
-   pageSize: z.number().int().catch(20).default(20),
+   pageSize: z.number().int().min(1).max(100).catch(20).default(20),
    search: z.string().catch("").default(""),
    view: z
       .enum(["all", "payable", "receivable", "settled", "ignored"])

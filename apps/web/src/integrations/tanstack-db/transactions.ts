@@ -27,6 +27,8 @@ type TransactionSortId = NonNullable<
 type TransactionsCollectionOptionsParams = {
    queryClient: QueryClient;
    teamId: string;
+   page: number;
+   pageSize: number;
    search?: string;
    view?: "all" | "payable" | "receivable" | "settled" | "ignored";
    overdueOnly?: boolean;
@@ -220,17 +222,16 @@ function parseTransactionsSorting(options: LoadSubsetOptions | undefined) {
 
 function transactionsInputFromLoadSubsetOptions(
    options: LoadSubsetOptions | undefined,
-   base: Omit<
-      TransactionsCollectionOptionsParams,
-      "queryClient" | "teamId"
-   > = {},
+   base: Omit<TransactionsCollectionOptionsParams, "queryClient" | "teamId">,
 ): TransactionsCollectionInput {
    const where = parseTransactionsWhere(options);
    const sorting = parseTransactionsSorting(options);
-   const limit = options?.limit;
-   const input: TransactionsCollectionInput = {
-      page: 1,
-      pageSize: 1000,
+   const pageSize = Math.min(100, Math.max(1, options?.limit ?? base.pageSize));
+   const offset = (base.page - 1) * base.pageSize + (options?.offset ?? 0);
+
+   return {
+      page: Math.floor(offset / pageSize) + 1,
+      pageSize,
       search: where.search ?? base.search,
       view: where.view ?? base.view,
       overdueOnly: where.overdueOnly ?? base.overdueOnly,
@@ -245,15 +246,6 @@ function transactionsInputFromLoadSubsetOptions(
       relationshipId: where.relationshipId ?? base.relationshipId,
       sorting,
    };
-
-   if (limit !== undefined) {
-      const pageSize = Math.min(1000, Math.max(1, limit));
-      const offset = options?.offset ?? 0;
-      input.page = Math.floor(offset / pageSize) + 1;
-      input.pageSize = pageSize;
-   }
-
-   return input;
 }
 
 function hasLoadSubsetOptions(options: LoadSubsetOptions | undefined) {
@@ -351,6 +343,8 @@ export function buildOptimisticTransactionRow({
 export function transactionsCollectionOptions({
    queryClient,
    teamId,
+   page,
+   pageSize,
    search,
    view,
    overdueOnly,
@@ -363,6 +357,8 @@ export function transactionsCollectionOptions({
    relationshipId,
 }: TransactionsCollectionOptionsParams) {
    const base = {
+      page,
+      pageSize,
       search,
       view,
       overdueOnly,
@@ -378,6 +374,8 @@ export function transactionsCollectionOptions({
       id: [
          "transactions",
          teamId,
+         page,
+         pageSize,
          search ?? "",
          view ?? "all",
          overdueOnly ? "overdue" : "all-dates",

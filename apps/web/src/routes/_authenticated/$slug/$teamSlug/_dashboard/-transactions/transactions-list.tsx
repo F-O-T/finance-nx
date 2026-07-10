@@ -559,6 +559,8 @@ export function TransactionsList() {
             transactionsCollectionOptions({
                queryClient,
                teamId: collectionTeamId,
+               page,
+               pageSize,
                search: trimmedSearch || undefined,
                view: "all",
                overdueOnly: false,
@@ -573,6 +575,8 @@ export function TransactionsList() {
          ),
       [
          collectionTeamId,
+         page,
+         pageSize,
          dueDateRangeFilter.from,
          dueDateRangeFilter.to,
          effectiveDateFrom,
@@ -834,10 +838,7 @@ export function TransactionsList() {
                .orderBy(({ transaction }) => transaction.createdAt, "desc");
          }
 
-         return query
-            .limit(pageSize)
-            .offset((page - 1) * pageSize)
-            .select(({ transaction }) => transaction);
+         return query.limit(pageSize).select(({ transaction }) => transaction);
       },
       [
          effectiveBankId,
@@ -2236,7 +2237,7 @@ export function TransactionsList() {
                   )}
                </ScrollArea>
             </TooltipProvider>
-            <DataTablePagination table={table} />
+            <DataTablePagination table={table} totalRows={total} />
          </div>
       </div>
    );

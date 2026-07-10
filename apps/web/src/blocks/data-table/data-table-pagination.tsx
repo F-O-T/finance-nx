@@ -18,15 +18,17 @@ const DEFAULT_PAGE_SIZES = [10, 20, 50, 100];
 
 interface DataTablePaginationProps<TData> {
    table: Table<TData>;
+   totalRows?: number;
    pageSizes?: number[];
 }
 
 export function DataTablePagination<TData>({
    table,
    pageSizes = DEFAULT_PAGE_SIZES,
+   totalRows,
 }: DataTablePaginationProps<TData>) {
    const { pageIndex, pageSize } = table.getState().pagination;
-   const total = table.getRowCount();
+   const total = totalRows ?? table.getRowCount();
    const pageCount = table.getPageCount();
    const from = total === 0 ? 0 : pageIndex * pageSize + 1;
    const to = Math.min((pageIndex + 1) * pageSize, total);
