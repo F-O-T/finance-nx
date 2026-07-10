@@ -1,6 +1,6 @@
 import { config as loadEnv } from "dotenv";
 import path from "node:path";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { fromThrowable } from "neverthrow";
 import { Pool } from "pg";
@@ -368,6 +368,37 @@ export async function insertExpenseTransaction(
       .returning();
    if (!row) throw new Error("Failed to insert transaction");
    return row;
+}
+
+export async function insertExpenseTransactions(
+   teamId: string,
+   bankAccountId: string,
+   expenses: Array<{ name: string; date: string }>,
+) {
+   return db()
+      .insert(transactions)
+      .values(
+         expenses.map((expense): typeof transactions.$inferInsert => ({
+            teamId,
+            name: expense.name,
+            type: "expense",
+            amount: "10.00",
+            date: expense.date,
+            bankAccountId,
+            status: "pending",
+         })),
+      )
+      .returning();
+}
+
+export async function deleteTransactionsByIds(teamId: string, ids: string[]) {
+   if (ids.length === 0) return;
+
+   await db()
+      .delete(transactions)
+      .where(
+         and(eq(transactions.teamId, teamId), inArray(transactions.id, ids)),
+      );
 }
 
 export async function deleteTransactionById(teamId: string, id: string) {
