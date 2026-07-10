@@ -6,6 +6,7 @@ import { createAuth } from "@core/authentication/server";
 import { createDb } from "@core/database/client";
 import { env } from "@core/environment/web";
 import { createS3Client } from "@core/files/client";
+import { log } from "@core/logging";
 import {
    createPostHog,
    createPromptsClient,
@@ -53,6 +54,14 @@ const pgBoss = startPgBossClient({
    connectionString: env.DATABASE_URL,
    applicationName: "montte-web-pg-boss",
    supervise: false,
+});
+pgBoss.catch((error) => {
+   log.error({
+      module: "orpc.server",
+      message:
+         "pg-boss client failed to start; queue-backed features stay unavailable until the process reconnects",
+      err: error,
+   });
 });
 const s3Client = createS3Client({
    endpointUrl: env.AWS_ENDPOINT_URL,

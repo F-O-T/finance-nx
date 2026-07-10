@@ -26,6 +26,10 @@ services:
       environment:
          POSTGRES_USER: postgres
          POSTGRES_PASSWORD: password
+         # POSTGRES_DB only creates the "montte" database on a fresh volume.
+         # Reusing a pre-existing montte_pgdata volume skips it, so self-host
+         # setups on an existing volume must create the "montte" database
+         # manually (e.g. `createdb -U postgres montte`).
          POSTGRES_DB: montte
       volumes:
          - montte_pgdata:/var/lib/postgresql/data
