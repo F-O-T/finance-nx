@@ -7,11 +7,11 @@ import {
 } from "@packages/ui/components/collapsible";
 import {
    Command,
-   CommandEmpty,
    CommandGroup,
    CommandInput,
    CommandItem,
    CommandList,
+   CommandSeparator,
 } from "@packages/ui/components/command";
 import { Combobox } from "@packages/ui/components/combobox";
 import { DatePicker } from "@packages/ui/components/date-picker";
@@ -56,7 +56,9 @@ import {
    ChevronsUpDownIcon,
    CornerDownRight,
    FileText,
+   Plus,
 } from "lucide-react";
+import posthog from "posthog-js";
 import * as React from "react";
 import { z } from "zod";
 import { useSheet } from "@/hooks/use-sheet";
@@ -73,6 +75,11 @@ type TransactionFormSheetProps = {
    bankAccounts: BankAccountNode[];
    categories: CategoryNode[];
    onCreate: (input: TransactionCreateInput) => Promise<boolean>;
+   onCreateCategory: (args: {
+      type: "income" | "expense";
+      name: string;
+      onCreated: (category: CategoryNode) => void;
+   }) => void;
 };
 
 function getErrorMessage(error: unknown, fallback: string) {
@@ -394,6 +401,10 @@ interface CategoryPickerProps {
    categories: CategoryNode[];
    value: string;
    onValueChange: (value: string) => void;
+   onCreateCategory: (
+      name: string,
+      onCreated: (category: CategoryNode) => void,
+   ) => void;
    onBlur?: React.FocusEventHandler<HTMLButtonElement>;
    id?: string;
 }
@@ -501,19 +512,27 @@ function CategoryPicker({
    categories,
    value,
    onValueChange,
+   onCreateCategory,
    onBlur,
    id,
 }: CategoryPickerProps) {
    const [open, setOpen] = React.useState(false);
    const [search, setSearch] = React.useState("");
    const [expanded, setExpanded] = React.useState<Set<string>>(new Set());
+   const [createdExtras, setCreatedExtras] = React.useState<CategoryNode[]>([]);
+
+   const mergedCategories = React.useMemo(() => {
+      if (createdExtras.length === 0) return categories;
+      const existing = new Set(categories.map((c) => c.id));
+      return [...categories, ...createdExtras.filter((c) => !existing.has(c.id))];
+   }, [categories, createdExtras]);
 
    const { roots, childrenByParent, byId } = React.useMemo(() => {
       const byId = new Map<string, CategoryNode>();
       const childrenByParent = new Map<string, CategoryNode[]>();
       const roots: CategoryNode[] = [];
-      for (const c of categories) byId.set(c.id, c);
-      for (const c of categories) {
+      for (const c of mergedCategories) byId.set(c.id, c);
+      for (const c of mergedCategories) {
          if (c.parentId) {
             const list = childrenByParent.get(c.parentId) ?? [];
             list.push(c);
@@ -523,7 +542,7 @@ function CategoryPicker({
          }
       }
       return { roots, childrenByParent, byId };
-   }, [categories]);
+   }, [mergedCategories]);
 
    const selected = value ? byId.get(value) : undefined;
    const selectedLabel = selected
@@ -560,6 +579,17 @@ function CategoryPicker({
       onValueChange(id === value ? "" : id);
       setOpen(false);
       setSearch("");
+   };
+
+   const handleCreateCategory = () => {
+      onCreateCategory(search.trim(), (category) => {
+         setCreatedExtras((prev) =>
+            prev.some((c) => c.id === category.id) ? prev : [...prev, category],
+         );
+         onValueChange(category.id);
+         setOpen(false);
+         setSearch("");
+      });
    };
 
    return (
@@ -604,7 +634,11 @@ function CategoryPicker({
                />
                <CommandList>
                   {visibleRoots.length === 0 ? (
-                     <CommandEmpty>Nenhuma categoria.</CommandEmpty>
+                     <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+                        {term
+                           ? "Nenhuma categoria encontrada."
+                           : "Nenhuma categoria ainda."}
+                     </div>
                   ) : null}
                   <CommandGroup>
                      {visibleRoots.map((root) => {
@@ -675,6 +709,23 @@ function CategoryPicker({
                         );
                      })}
                   </CommandGroup>
+                  <CommandSeparator />
+                  <CommandGroup>
+                     <CommandItem
+                        value="__create-category"
+                        onSelect={handleCreateCategory}
+                        className="gap-2"
+                     >
+                        <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-dashed text-muted-foreground">
+                           <Plus className="size-3" />
+                        </span>
+                        <span className="min-w-0 flex-1 truncate">
+                           {term
+                              ? `Criar categoria "${search.trim()}"`
+                              : "Criar categoria"}
+                        </span>
+                     </CommandItem>
+                  </CommandGroup>
                </CommandList>
             </Command>
          </PopoverContent>
@@ -686,6 +737,7 @@ export function TransactionFormSheet({
    bankAccounts,
    categories,
    onCreate,
+   onCreateCategory,
 }: TransactionFormSheetProps) {
    const { closeTopSheet } = useSheet();
 
@@ -710,6 +762,7 @@ export function TransactionFormSheet({
             toast.error("Não foi possível criar o lançamento.");
             return;
          }
+         posthog.capture("transaction_created", { type: input.type });
          toast.success("Lançamento criado com sucesso.");
          closeTopSheet();
       },
@@ -719,6 +772,15 @@ export function TransactionFormSheet({
    const form = useForm({
       defaultValues: DEFAULT_VALUES,
       validators: { onMount: formSchema, onChange: formSchema },
+      onSubmitInvalid: ({ formApi }) => {
+         const fields = Object.entries(formApi.state.fieldMeta)
+            .filter(([, meta]) => meta.errors.length > 0)
+            .map(([name]) => name);
+         posthog.capture("transaction_create_validation_failed", {
+            type: formApi.state.values.type,
+            fields,
+         });
+      },
       onSubmit: async ({ value }) => {
          const attachments = value.attachments;
          await submitCreate({
@@ -942,6 +1004,16 @@ export function TransactionFormSheet({
                                        onBlur={field.handleBlur}
                                        onValueChange={(v) =>
                                           field.handleChange(v)
+                                       }
+                                       onCreateCategory={(name, onCreated) =>
+                                          onCreateCategory({
+                                             type:
+                                                type === "income"
+                                                   ? "income"
+                                                   : "expense",
+                                             name,
+                                             onCreated,
+                                          })
                                        }
                                     />
                                     {isFieldInvalid(field) ? (
@@ -1465,17 +1537,10 @@ export function TransactionFormSheet({
             <SheetClose asChild>
                <Button variant="outline">Cancelar</Button>
             </SheetClose>
-            <form.Subscribe
-               selector={(s) => ({
-                  canSubmit: s.canSubmit,
-                  isSubmitting: s.isSubmitting,
-               })}
-            >
-               {({ canSubmit, isSubmitting }) => (
+            <form.Subscribe selector={(s) => s.isSubmitting}>
+               {(isSubmitting) => (
                   <Button
-                     disabled={
-                        !canSubmit || isSubmitting || upload.control.isPending
-                     }
+                     disabled={isSubmitting || upload.control.isPending}
                      onClick={() => form.handleSubmit()}
                   >
                      Criar lançamento

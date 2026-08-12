@@ -159,17 +159,23 @@ export function CategoryFormSheet({
    categories,
    collection,
    teamId,
+   defaultType,
+   defaultName,
+   onCreated,
 }: {
    categories: CategoryOption[];
    collection: Collection<CategoryOption, string>;
    teamId: string | null;
+   defaultType?: CategoryType;
+   defaultName?: string;
+   onCreated?: (category: CategoryOption) => void;
 }) {
    const { closeTopSheet } = useSheet();
    const [isSubcategory, setIsSubcategory] = useState(false);
    const [moreOpen, setMoreOpen] = useState(false);
    const [defaultValues] = useState<FormValues>(() => ({
-      type: "expense",
-      name: "",
+      type: defaultType ?? "expense",
+      name: defaultName ?? "",
       parentId: NO_PARENT_VALUE,
       icon: "briefcase",
       color: randomPresetColor(),
@@ -192,25 +198,26 @@ export function CategoryFormSheet({
          );
          const now = dayjs().toDate();
          const createCategory = createCategoryAction(collection);
+         const row: CategoryOption = {
+            id: crypto.randomUUID(),
+            teamId,
+            parentId: selectedParent?.id ?? null,
+            name: value.name.trim(),
+            type: value.type,
+            level: selectedParent ? selectedParent.level + 1 : 1,
+            description: null,
+            isDefault: false,
+            color: selectedParent ? null : (value.color ?? null),
+            icon: selectedParent ? null : value.icon,
+            isArchived: false,
+            notes: null,
+            participatesDre: false,
+            dreGroupId: null,
+            createdAt: now,
+            updatedAt: now,
+         };
          const transaction = createCategory({
-            row: {
-               id: crypto.randomUUID(),
-               teamId,
-               parentId: selectedParent?.id ?? null,
-               name: value.name.trim(),
-               type: value.type,
-               level: selectedParent ? selectedParent.level + 1 : 1,
-               description: null,
-               isDefault: false,
-               color: selectedParent ? null : (value.color ?? null),
-               icon: selectedParent ? null : value.icon,
-               isArchived: false,
-               notes: null,
-               participatesDre: false,
-               dreGroupId: null,
-               createdAt: now,
-               updatedAt: now,
-            },
+            row,
             input: {
                name: value.name.trim(),
                type: value.type,
@@ -228,6 +235,7 @@ export function CategoryFormSheet({
             toast.error(getErrorMessage(result.error));
             return;
          }
+         onCreated?.(row);
          toast.success("Categoria criada com sucesso.");
          closeTopSheet();
       },

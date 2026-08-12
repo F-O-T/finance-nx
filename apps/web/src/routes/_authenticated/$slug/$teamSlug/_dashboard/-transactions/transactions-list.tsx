@@ -80,6 +80,7 @@ import { cn } from "@packages/ui/lib/utils";
 import { useDataImport } from "@/blocks/data-table/data-import/use-data-import";
 import type { DataImportConfig } from "@/blocks/data-table/data-import/use-data-import";
 import { useSheet } from "@/hooks/use-sheet";
+import { CategoryFormSheet } from "../-categories/category-form-sheet";
 import { TransactionFormSheet } from "./transaction-form-sheet";
 import { useCsvFile } from "@/hooks/use-csv-file";
 import { useOfxFile } from "@/hooks/use-ofx-file";
@@ -1293,10 +1294,31 @@ export function TransactionsList() {
                bankAccounts={safeBankAccounts}
                categories={safeCategories}
                onCreate={handleCreateTransaction}
+               onCreateCategory={({ type, name, onCreated }) => {
+                  openSheet({
+                     renderChildren: () => (
+                        <CategoryFormSheet
+                           categories={safeCategories}
+                           collection={categoriesCollection}
+                           teamId={activeTeamId}
+                           defaultType={type}
+                           defaultName={name}
+                           onCreated={onCreated}
+                        />
+                     ),
+                  });
+               }}
             />
          ),
       });
-   }, [handleCreateTransaction, openSheet, safeBankAccounts, safeCategories]);
+   }, [
+      activeTeamId,
+      categoriesCollection,
+      handleCreateTransaction,
+      openSheet,
+      safeBankAccounts,
+      safeCategories,
+   ]);
 
    const handleDelete = useCallback(
       (transaction: TransactionRow) => {
