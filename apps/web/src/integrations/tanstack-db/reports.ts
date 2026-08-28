@@ -1,4 +1,5 @@
 import dayjs from "dayjs";
+import { ORPCError } from "@orpc/client";
 import { queryCollectionOptions } from "@tanstack/query-db-collection";
 import type { QueryClient } from "@tanstack/query-core";
 import { createOptimisticAction } from "@tanstack/react-db";
@@ -210,10 +211,16 @@ export function reportByIdCollectionOptions({
    return queryCollectionOptions({
       id: `reports-by-id:${teamId}:${id}`,
       queryKey: ["reports", teamId, id],
-      queryFn: async () => {
-         const report = await orpc.reports.get.call({ id });
-         return [report];
-      },
+      queryFn: () =>
+         orpc.reports.get
+            .call({ id })
+            .then((report) => [report])
+            .catch((error: unknown) => {
+               if (error instanceof ORPCError && error.code === "NOT_FOUND") {
+                  return [];
+               }
+               throw error;
+            }),
       queryClient,
       getKey: (report) => report.id,
       syncMode: "on-demand",
